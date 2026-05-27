@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   loadKnowledge, saveKnowledge, saveDraft, loadDraft,
   promoteDraft, listSites, deleteDraft,
+  validateKnowledgeStructure,
 } from '../src/knowledge-base.js';
 import { rmSync } from 'fs';
 import { join } from 'path';
@@ -66,5 +67,33 @@ describe('listSites', () => {
     const sites = listSites();
     expect(sites).toContain('__test__');
     expect(sites).toContain('__test__2');
+  });
+});
+
+describe('validateKnowledgeStructure', () => {
+  it('returns valid for complete knowledge', () => {
+    const result = validateKnowledgeStructure(makeKnowledge());
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('returns errors for missing site field', () => {
+    const k = { workflow: { steps: [] } } as any;
+    const result = validateKnowledgeStructure(k);
+    expect(result.valid).toBe(false);
+  });
+
+  it('returns errors for step with invalid action', () => {
+    const k = makeKnowledge();
+    k.workflow.steps.push({ action: 'invalid_action' as any });
+    const result = validateKnowledgeStructure(k);
+    expect(result.valid).toBe(false);
+  });
+
+  it('checks fill step has source or value', () => {
+    const k = makeKnowledge();
+    k.workflow.steps = [{ action: 'fill', field: 'name' } as any];
+    const result = validateKnowledgeStructure(k);
+    expect(result.valid).toBe(false);
   });
 });

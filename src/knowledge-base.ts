@@ -62,3 +62,39 @@ export function listSites(): string[] {
 export function siteExists(siteId: string): boolean {
   return existsSync(filePath(siteId));
 }
+
+const VALID_ACTIONS = new Set([
+  'open', 'click', 'fill', 'upload', 'select', 'select_category',
+  'check', 'uncheck', 'press', 'wait', 'verify', 'eval', 'record_result',
+]);
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+export function validateKnowledgeStructure(data: any): ValidationResult {
+  const errors: string[] = [];
+
+  if (!data.site?.name) errors.push('Missing site.name');
+  if (!data.site?.url) errors.push('Missing site.url');
+  if (!data.auth?.method) errors.push('Missing auth.method');
+  if (!data.workflow?.steps?.length) errors.push('workflow.steps must be non-empty array');
+
+  data.workflow?.steps?.forEach((step: any, i: number) => {
+    if (!step.action || !VALID_ACTIONS.has(step.action)) {
+      errors.push(`Step ${i}: invalid or missing action '${step.action}'`);
+    }
+    if (step.action === 'fill' && !step.source && !step.value) {
+      errors.push(`Step ${i}: fill action requires 'source' or 'value'`);
+    }
+    if (step.action === 'upload' && !step.source) {
+      errors.push(`Step ${i}: upload action requires 'source'`);
+    }
+    if (step.action === 'open' && !step.target) {
+      errors.push(`Step ${i}: open action requires 'target'`);
+    }
+  });
+
+  return { valid: errors.length === 0, errors };
+}
