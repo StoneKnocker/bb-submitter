@@ -185,7 +185,6 @@ export interface WorkflowStep {
   human_intervention?: string; // reason text
   verify?: string;           // ref pattern to verify
   mapping?: Record<string, string>; // for select_category
-  known_quirks?: string[];   // site-level quirks
   multi?: boolean;           // for upload, multi-file
   max?: number;              // for upload, max count
 }
@@ -1424,6 +1423,7 @@ export async function executeStep(
       case 'open': {
         const result = bbOpen(step.target!);
         if (step.wait) await sleep(step.wait);
+        if (step.wait_for) bbWait(step.wait_for); // Wait for specific element
         return { ok: result.ok, step, error: result.stderr || undefined };
       }
 
@@ -1560,7 +1560,30 @@ async function resolveRef(step: WorkflowStep, context: ExecutorContext): Promise
 }
 ```
 
-Update each interaction step to call `resolveRef()` before acting. If `resolveRef` returns null, fall back to Agent (emit needsIntervention for DOM change).
+Update each interaction step (click/fill/upload/select) to call `resolveRef()` before acting. The integration point is right before the switch's element interaction cases:
+
+```typescript
+// Before click/fill/upload/select cases:
+if (['click', 'fill', 'upload', 'select', 'select_category', 'check', 'uncheck'].includes(step.action)) {
+  const resolvedRef = await resolveRef(step, context);
+  if (!resolvedRef) {
+    return { ok: false, step, needsIntervention: true, interventionReason: 'DOM change: element not found', error: 'ref resolution failed' };
+  }
+  step = { ...step, ref: resolvedRef }; // Use resolved ref
+}
+```
+
+Similarly, update the `upload` case to use `resolveProductPath()` instead of the generic `resolveValue()`:
+
+```typescript
+case 'upload': {
+  const path = resolveProductPath(step.source || '', context.productId || '');
+  const result = bbUpload(step.ref!, path);
+  return { ok: result.ok, step, error: result.stderr || undefined };
+}
+```
+
+If `resolveRef` returns null, fall back to Agent (emit needsIntervention for DOM change).
 
 - [ ] **Step 5: Fix upload file path resolution**
 
@@ -2119,7 +2142,7 @@ git commit -m "feat: add batch mode orchestrator with resume support"
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { loadProduct } from './product-store.js';
-import { loadKnowledge, listSites, siteExists, saveDraft, promoteDraft, loadDraft, validateKnowledgeStructure } from './knowledge-base.js';
+import { loadKnowledge, listSites, saveKnowledge, saveDraft, promoteDraft, loadDraft, validateKnowledgeStructure } from './knowledge-base.js';
 import { loadMappings } from './category-mapper.js';
 import { loadTracker, saveTracker, updateEntry, getStatus, getSummary, getPendingSites } from './tracker.js';
 import { executeWorkflow } from './executor.js';
@@ -2633,11 +2656,11 @@ Check if site knowledge is still valid by opening the submit page and verifying 
 6. Update `last_validated` timestamp in knowledge YAML
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add .claude/
-git commit -m "feat: add Claude Code skills for teach/submit/batch workflows"
+git commit -m "feat: add Claude Code skills for teach/submit/batch/knowledge-validate workflows"
 ```
 
 ---
