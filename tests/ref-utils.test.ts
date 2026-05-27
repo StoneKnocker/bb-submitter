@@ -52,6 +52,46 @@ describe('matchRef', () => {
   });
 });
 
+describe('extractElementMeta', () => {
+  it('extracts structured metadata from a ref string', () => {
+    const meta = extractElementMeta("@2 [input type='text'] placeholder='Startup name' aria-label='Name field'");
+    expect(meta).not.toBeNull();
+    expect(meta!.tag).toBe('input');
+    expect(meta!.type).toBe('text');
+    expect(meta!.placeholder).toBe('Startup name');
+    expect(meta!.ariaLabel).toBe('Name field');
+  });
+
+  it('returns null for invalid ref', () => {
+    expect(extractElementMeta('not a ref')).toBeNull();
+  });
+
+  it('handles elements with minimal attributes', () => {
+    const meta = extractElementMeta("@5 [button] 'Click me'");
+    expect(meta).not.toBeNull();
+    expect(meta!.tag).toBe('button');
+    expect(meta!.type).toBeNull();
+    expect(meta!.placeholder).toBeNull();
+  });
+});
+
+describe('matchRef with :has-text()', () => {
+  it('matches element by text content with :has-text() when index shifted', () => {
+    const recorded = "@1 [button type='submit'] 'Submit'";
+    const semantic = "[button]:has-text('Submit')";
+    const currentSnapshot = [
+      "@1 [button] 'New Banner'",
+      "@2 [button] 'Cancel'",
+      "@3 [button] 'Submit'",
+    ].join('\n');
+
+    const result = matchRef(recorded, currentSnapshot, semantic);
+    expect(result).not.toBeNull();
+    expect(result!.ref).toBe('@3');
+    expect(result!.method).toBe('semantic');
+  });
+});
+
 describe('generateSemanticSelector', () => {
   it('generates CSS selector from element meta', () => {
     const meta = { tag: 'input', type: 'text', placeholder: 'Startup name', ariaLabel: null, name: null, id: null, classList: null };
