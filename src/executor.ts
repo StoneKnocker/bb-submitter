@@ -103,7 +103,10 @@ export function resolveValue(
   if (step.source) {
     if (step.source.startsWith('product.') && context.product) {
       const resolved = getByPath(context.product, step.source);
-      if (resolved !== undefined && resolved !== null) return String(resolved);
+      if (resolved !== undefined && resolved !== null) {
+        if (typeof resolved === 'object') return '';
+        return String(resolved);
+      }
     }
     return step.source;
   }
@@ -125,7 +128,9 @@ export function resolveProductPath(
 ): string {
   if (source.startsWith('product.') && productId) {
     const filename = source.slice('product.'.length);
-    const fullPath = resolve(process.cwd(), 'products', productId, filename);
+    const baseDir = resolve(process.cwd(), 'products', productId);
+    const fullPath = resolve(baseDir, filename);
+    if (!fullPath.startsWith(baseDir + '/')) return source;
     if (existsSync(fullPath)) return fullPath;
   }
   return source;
@@ -211,13 +216,17 @@ export async function executeStep(
   switch (step.action) {
     case 'open': {
       const r = bbOpen(step.target!);
+      if (!r.ok) {
+        return { ok: false, step, error: r.stderr || r.stdout || 'open failed' };
+      }
       if (step.wait) await sleep(step.wait);
-      if (step.wait_for) bbWait(step.wait_for);
-      return {
-        ok: r.ok,
-        step,
-        error: r.ok ? undefined : r.stderr || r.stdout || undefined,
-      };
+      if (step.wait_for) {
+        const wr = bbWait(step.wait_for);
+        if (!wr.ok) {
+          return { ok: false, step, error: `wait_for '${step.wait_for}' failed: ${wr.stderr || wr.stdout}` };
+        }
+      }
+      return { ok: true, step };
     }
 
     case 'click': {
