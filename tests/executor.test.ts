@@ -54,6 +54,7 @@ import {
   executeWorkflow,
   executeStepWithRetry,
   resolveValue,
+  resolveProductPath,
   classifyError,
   isRetriableError,
 } from '../src/executor.js';
@@ -369,6 +370,23 @@ describe('executeStep', () => {
     expect(mocks.bbClick).toHaveBeenCalledTimes(1);
   });
 
+  it('upload: calls bbUpload with resolved path', async () => {
+    mocks.bbSnapshot.mockImplementation(() => ({
+      ok: true,
+      stdout: '@5 [input type=\'file\'] accept=\'image/*\'',
+      stderr: '',
+    }));
+    const step: WorkflowStep = {
+      action: 'upload',
+      ref: '@5 [input type=\'file\']',
+      source: 'product.logo.png',
+    };
+    const ctx: ExecutorContext = { productId: 'myapp' };
+    const result = await executeStep(step, ctx);
+    expect(result.ok).toBe(true);
+    expect(mocks.bbUpload).toHaveBeenCalledTimes(1);
+  });
+
   it('open: sleeps when step.wait is set', async () => {
     vi.useFakeTimers();
     const step: WorkflowStep = {
@@ -390,6 +408,24 @@ describe('executeStep', () => {
     };
     await executeStep(step, {});
     expect(mocks.bbWait).toHaveBeenCalledWith('#app-loaded');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveProductPath
+// ---------------------------------------------------------------------------
+
+describe('resolveProductPath', () => {
+  it('returns source as-is when productId is missing', () => {
+    expect(resolveProductPath('product.logo.png')).toBe('product.logo.png');
+  });
+
+  it('returns source as-is when source has no product. prefix', () => {
+    expect(resolveProductPath('/absolute/path.png', 'myapp')).toBe('/absolute/path.png');
+  });
+
+  it('returns source as-is when file does not exist', () => {
+    expect(resolveProductPath('product.logo.png', 'nonexistent')).toBe('product.logo.png');
   });
 });
 
@@ -520,6 +556,12 @@ describe('classifyError', () => {
     ).toBe('oauth');
   });
 
+  it('classifies file upload errors as file_upload_reject', () => {
+    expect(classifyError({ ...base, error: 'file format not supported' })).toBe(
+      'file_upload_reject',
+    );
+  });
+
   it('classifies unknown errors as unknown', () => {
     expect(classifyError({ ...base, error: 'something weird' })).toBe(
       'unknown',
@@ -546,6 +588,10 @@ describe('isRetriableError', () => {
 
   it('returns false for form_validation', () => {
     expect(isRetriableError('form_validation')).toBe(false);
+  });
+
+  it('returns false for file_upload_reject', () => {
+    expect(isRetriableError('file_upload_reject')).toBe(false);
   });
 
   it('returns false for server_reject', () => {

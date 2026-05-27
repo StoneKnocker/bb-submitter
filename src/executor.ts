@@ -44,6 +44,7 @@ type ErrorCategory =
   | 'oauth'
   | 'form_validation'
   | 'server_reject'
+  | 'file_upload_reject'
   | 'unknown';
 
 // Actions that require a DOM ref to be resolved before execution.
@@ -376,9 +377,10 @@ export async function executeWorkflow(
     reason: string,
     step: WorkflowStep,
   ) => Promise<'done' | 'skip' | 'retry'>,
+  productId?: string,
 ): Promise<StepResult[]> {
   const results: StepResult[] = [];
-  const context: ExecutorContext = { product, onIntervention };
+  const context: ExecutorContext = { product, onIntervention, productId };
 
   for (const step of steps) {
     const result = await executeStep(step, context);
@@ -418,6 +420,9 @@ export function classifyError(result: StepResult): ErrorCategory {
   }
   if (/validation|required|invalid/i.test(err)) {
     return 'form_validation';
+  }
+  if (/file.*(?:format|size|type|reject)|invalid.*file|upload.*fail/i.test(err)) {
+    return 'file_upload_reject';
   }
 
   const reason = (result.interventionReason || '').toLowerCase();
