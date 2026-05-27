@@ -13,7 +13,7 @@ export function parseRef(ref: string): RefInfo | null {
   const insideBracket = match[2];
   const text = match[3];
 
-  const parts = insideBracket.match(/^(\w+)(?:\s+(.*))?$/);
+  const parts = insideBracket.match(/^([\w-]+)(?:\s+(.*))?$/);
   if (!parts) return null;
 
   const tag = parts[1];
@@ -83,14 +83,14 @@ function semanticMatch(selector: string, parsed: RefInfo): boolean {
 }
 
 function matchSingleSelector(selector: string, parsed: RefInfo): boolean {
-  const tagMatch = selector.match(/^\[(\w+)\]/);
+  const tagMatch = selector.match(/^\[([\w-]+)\]/);
   if (tagMatch && tagMatch[1] !== parsed.tag) return false;
 
-  const attrContainsRegex = /\[(\w+(?:-\w+)*)\*='([^']+)'\s*i\]/g;
+  const attrContainsRegex = /\[(\w+(?:-\w+)*)\*=(('[^']+'|"[^"]+"))\s*i\]/g;
   let m;
   while ((m = attrContainsRegex.exec(selector)) !== null) {
     const attrName = m[1];
-    const attrValue = m[2].toLowerCase();
+    const attrValue = m[2].replace(/^['"]|['"]$/g, '').toLowerCase();
     const matchingAttr = parsed.attrs.find(a => {
       const [aName, aValue] = a.split('=');
       return aName.toLowerCase() === attrName.toLowerCase() &&
@@ -118,19 +118,23 @@ export interface ElementMeta {
   classList: string | null;
 }
 
+function esc(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 export function generateSemanticSelector(meta: ElementMeta): string {
   const selectors: string[] = [];
   if (meta.ariaLabel) {
-    selectors.push(`[${meta.tag}][aria-label*='${meta.ariaLabel}' i]`);
+    selectors.push(`[${meta.tag}][aria-label*='${esc(meta.ariaLabel)}' i]`);
   }
   if (meta.placeholder) {
-    selectors.push(`[${meta.tag}][placeholder*='${meta.placeholder.substring(0, 30)}' i]`);
+    selectors.push(`[${meta.tag}][placeholder*='${esc(meta.placeholder.substring(0, 30))}' i]`);
   }
   if (meta.name) {
-    selectors.push(`[${meta.tag}][name*='${meta.name}' i]`);
+    selectors.push(`[${meta.tag}][name*='${esc(meta.name)}' i]`);
   }
   if (meta.id) {
-    selectors.push(`[${meta.tag}]#${meta.id}`);
+    selectors.push(`[${meta.tag}]#${esc(meta.id)}`);
   }
   return selectors.join(', ');
 }

@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 export interface BbBrowserResult {
   ok: boolean;
@@ -9,9 +9,8 @@ export interface BbBrowserResult {
 const BIN = 'bb-browser';
 
 function run(args: string[], timeoutMs = 30000): BbBrowserResult {
-  const cmd = [BIN, ...args].join(' ');
   try {
-    const stdout = execSync(cmd, {
+    const stdout = execFileSync(BIN, args, {
       encoding: 'utf-8',
       timeout: timeoutMs,
       stdio: ['pipe', 'pipe', 'pipe'],
