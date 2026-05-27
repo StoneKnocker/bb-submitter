@@ -417,7 +417,10 @@ last_validated: 2026-05-27
 | `click` | 点击元素 | wait, verify (post-condition) |
 | `fill` | 填充输入框，source 指向 product 字段 | - |
 | `upload` | 上传文件，source 指向 product 文件路径 | - |
-| `select_category` | 选择分类，含 mapping 表 | - |
+| `select` | 下拉框选择(非分类类，如国家/语言)，value 直接指定 | - |
+| `select_category` | 选择分类(含 mapping 表，与 select 的区别是走 Category Mapper) | - |
+| `check` / `uncheck` | 勾选/取消复选框(如同意条款) | - |
+| `press` | 发送按键(如 Enter/Tab) | - |
 | `wait` | 等待指定时间或元素出现 | - |
 | `verify` | 验证预期内容出现(独立 step，用于页面内容校验) | - |
 | `eval` | 执行 JavaScript | - |
@@ -571,13 +574,13 @@ bb-submitter batch --product <name> \
 bb-submitter status --product <name>          查看产品提交进度
 bb-submitter knowledge list                   列出已学站点
 bb-submitter knowledge show <site>            查看站点知识
-bb-submitter knowledge edit <site>            手动编辑知识记录
-bb-submitter knowledge validate <site>        检查站点知识是否仍有效
-                                           (打开页面, 用 semantic selector 匹配每个 step, 报告 valid/partial/broken)
 
 bb-submitter knowledge edit <site>            用 $EDITOR 打开 knowledge/sites/<site>.yaml
                                                编辑完后自动运行 validate 检查
                                                如 validate 返回 broken, 提示用户考虑重新 teach
+
+bb-submitter knowledge validate <site>        检查站点知识是否仍有效
+                                           (打开页面, 用 semantic selector 匹配每个 step, 报告 valid/partial/broken)
 ```
 
 ## Tech Stack
