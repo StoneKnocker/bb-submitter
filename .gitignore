@@ -38,3 +38,4 @@ bin/bb-viewer-*
 # Worktrees
 .worktrees/
 .superpowers/
+.worktrees/
