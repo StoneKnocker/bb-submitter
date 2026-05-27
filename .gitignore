@@ -39,3 +39,11 @@ bin/bb-viewer-*
 .worktrees/
 .superpowers/
 .worktrees/
+
+# Project-specific patterns
+products/__test__/
+knowledge/sites/__test__/
+knowledge/sites/.drafts/
+knowledge/__test_*
+submissions/.batch-running
+submissions/__test__/
