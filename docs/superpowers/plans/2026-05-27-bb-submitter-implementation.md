@@ -4,11 +4,17 @@
 
 **Goal:** Build a CLI tool + library that automates submitting web products to 100+ navigation sites, with Teaching Mode (learn form structure) and Replay Mode (auto-fill from knowledge).
 
-**Architecture:** TypeScript library handles all deterministic operations (YAML I/O, bb-browser command execution, ref matching, tracker). Claude Code Agent handles intelligent parts (form semantic analysis, field mapping inference, exception judgment). The CLI is a thin orchestration layer; teach/submit/batch flows are driven by Claude invoking the library + bb-browser.
+**Architecture:** TypeScript library handles all deterministic operations (YAML I/O, bb-browser command execution, dual-match ref resolution with semantic fallback, tracker). Claude Code Agent handles intelligent parts (form semantic analysis, field mapping inference, exception judgment). The CLI is a thin orchestration layer; teach/submit/batch flows are driven by Claude invoking the library + bb-browser.
 
 **Tech Stack:** TypeScript, Node.js, YAML (js-yaml), bb-browser CLI, Commander.js (CLI parsing)
 
 **Spec:** `docs/superpowers/specs/2026-05-27-bb-submitter-design.md`
+
+**IMPORTANT implementation notes:**
+- `__dirname` is not available in ESM (`"module": "NodeNext"`). Vitest transforms it at test time, but for any non-test usage, use `import.meta.url` with `fileURLToPath`. Tests can safely use `__dirname` since vitest handles the transform.
+- Before each element interaction in executor, take a fresh snapshot and resolve the ref via `matchRef()` (dual-match: direct index → semantic CSS fallback → Agent intervention).
+- Upload file paths in site knowledge (e.g., `source: "product.logo-256x256.png"`) must be resolved to actual filesystem paths: `products/<id>/logo-256x256.png`.
+- All network-failing steps must be retried 3 times with delays (5s/10s/30s) before giving up.
 
 ---
 
@@ -645,8 +651,8 @@ export function validateKnowledgeStructure(data: any): ValidationResult {
     if (!step.action || !VALID_ACTIONS.has(step.action)) {
       errors.push(`Step ${i}: invalid or missing action '${step.action}'`);
     }
-    if (step.action === 'fill' && !step.source) {
-      errors.push(`Step ${i}: fill action requires 'source'`);
+    if (step.action === 'fill' && !step.source && !step.value) {
+      errors.push(`Step ${i}: fill action requires 'source' or 'value'`);
     }
     if (step.action === 'upload' && !step.source) {
       errors.push(`Step ${i}: upload action requires 'source'`);
@@ -691,6 +697,7 @@ import {
   setMapping,
   saveMappings,
   getMappedCategories,
+  setMappingsPath,
 } from '../src/category-mapper.js';
 import { writeFileSync, rmSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
@@ -701,6 +708,8 @@ const TEST_MAPPINGS_PATH = join(__dirname, '..', 'knowledge', '__test_category-m
 beforeEach(() => {
   mkdirSync(join(__dirname, '..', 'knowledge'), { recursive: true });
   writeFileSync(TEST_MAPPINGS_PATH, yaml.dump({ global_tags: {} }));
+  // Point category mapper to test file
+  setMappingsPath(TEST_MAPPINGS_PATH);
 });
 
 afterEach(() => {
@@ -1529,18 +1538,97 @@ function sleep(ms: number): Promise<void> {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [ ] **Step 4: Integrate ref-utils for dual-match element resolution**
+
+Before each element interaction (click/fill/upload/select), take a fresh snapshot and resolve the ref:
+
+```typescript
+import { matchRef } from './ref-utils.js';
+import { bbSnapshot } from './bb-browser.js';
+
+// Add to ExecutorContext:
+interface ExecutorContext {
+  // ... existing fields
+  snapshotCache?: string;
+}
+
+async function resolveRef(step: WorkflowStep, context: ExecutorContext): Promise<string | null> {
+  const snapshot = bbSnapshot({ interactive: false }).stdout;
+  context.snapshotCache = snapshot;
+  const result = matchRef(step.ref || '', snapshot, step.semantic);
+  return result?.ref || null;
+}
+```
+
+Update each interaction step to call `resolveRef()` before acting. If `resolveRef` returns null, fall back to Agent (emit needsIntervention for DOM change).
+
+- [ ] **Step 5: Fix upload file path resolution**
+
+Add a dedicated function to resolve product file paths:
+
+```typescript
+import { resolve } from 'path';
+
+function resolveProductPath(source: string, productId: string): string {
+  if (source.startsWith('product.')) {
+    const relPath = source.replace('product.', '').replace(/\./g, '/');
+    // For file uploads: product.logo-256x256.png → products/<id>/logo-256x256.png
+    // For data fields: product.name → resolved via product data object
+    const filePath = resolve(process.cwd(), 'products', productId, relPath);
+    if (existsSync(filePath)) return filePath;
+    // If not a file, return the dotted path for data resolution
+    return source;
+  }
+  return source;
+}
+```
+
+- [ ] **Step 6: Add retry logic for network errors**
+
+```typescript
+async function executeStepWithRetry(
+  step: WorkflowStep,
+  context: ExecutorContext,
+  maxRetries = 3
+): Promise<StepResult> {
+  const delays = [5000, 10000, 30000]; // 5s, 10s, 30s
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const result = await executeStep(step, context);
+    if (result.ok) return result;
+    const category = classifyError(result);
+    if (!isRetriableError(category) || attempt === maxRetries) return result;
+    await new Promise(r => setTimeout(r, delays[attempt] || 30000));
+  }
+  return { ok: false, step, error: 'Max retries exceeded' };
+}
+```
+
+- [ ] **Step 7: Add argument verification to executor tests**
+
+Update executor tests to verify mock function calls:
+
+```typescript
+it('executes fill step with correct value from product source', async () => {
+  const { bbFill } = await import('../src/bb-browser.js');
+  const step: WorkflowStep = { action: 'fill', ref: '@1', source: 'product.name' };
+  const result = await executeStep(step, { product: { name: 'My App' } });
+  expect(result.ok).toBe(true);
+  expect(bbFill).toHaveBeenCalledWith('@1', 'My App');
+});
+```
+
+- [ ] **Step 8: Run tests**
 
 ```bash
 npx vitest run tests/executor.test.ts
 ```
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src/executor.ts tests/executor.test.ts
-git commit -m "feat: add deterministic workflow step executor"
+git commit -m "feat: add deterministic workflow step executor with ref matching and retry"
 ```
 
 ---
@@ -1595,7 +1683,7 @@ export async function handleIntervention(
   return 'done';
 }
 
-export function classifyError(result: StepResult): 'network' | 'dom_change' | 'captcha' | 'oauth' | 'server_reject' | 'unknown' {
+export function classifyError(result: StepResult): 'network' | 'dom_change' | 'captcha' | 'oauth' | 'form_validation' | 'server_reject' | 'unknown' {
   if (!result.ok) {
     const err = (result.error || '').toLowerCase();
     if (err.includes('timeout') || err.includes('econnrefused') || err.includes('enotfound')) {
@@ -1607,6 +1695,10 @@ export function classifyError(result: StepResult): 'network' | 'dom_change' | 'c
     if (err.includes('403') || err.includes('429') || err.includes('500')) {
       return 'server_reject';
     }
+    // Form validation: server returned field-level error messages
+    if (err.includes('validation') || err.includes('required') || err.includes('invalid')) {
+      return 'form_validation';
+    }
   }
   if (result.needsIntervention) {
     const reason = (result.interventionReason || '').toLowerCase();
@@ -1617,7 +1709,7 @@ export function classifyError(result: StepResult): 'network' | 'dom_change' | 'c
 }
 
 export function isInteractiveError(category: string): boolean {
-  return ['dom_change', 'captcha', 'oauth'].includes(category);
+  return ['dom_change', 'captcha', 'oauth', 'form_validation'].includes(category);
 }
 
 export function isRetriableError(category: string): boolean {
@@ -1828,7 +1920,8 @@ export function getSummary(tracker: SubmissionTracker): SubmissionTracker['statu
 export function getPendingSites(tracker: SubmissionTracker, allSites: string[]): string[] {
   return allSites.filter(site => {
     const status = getStatus(tracker, site);
-    return status !== 'success';
+    // Skip already-successful and needs_review (requires human decision)
+    return status !== 'success' && status !== 'needs_review';
   });
 }
 ```
@@ -2248,9 +2341,9 @@ knowledgeCmd
 knowledgeCmd
   .command('edit <site>')
   .description('Edit site knowledge with $EDITOR')
-  .action((site) => {
+  .action(async (site) => {
     const editor = process.env.EDITOR || 'vim';
-    const { spawnSync } = require('child_process');
+    const { spawnSync } = await import('child_process');
     const filePath = resolve(process.cwd(), 'knowledge', 'sites', `${site}.yaml`);
     spawnSync(editor, [filePath], { stdio: 'inherit' });
     console.log('Validating...');
@@ -2268,11 +2361,73 @@ knowledgeCmd
   .command('validate <site>')
   .description('Check if site knowledge is still valid by opening the page')
   .action(async (site) => {
-    console.log(`Validating ${site}...`);
-    console.log('(Requires bb-browser daemon running)');
-    console.log('Implementation: opens submit URL, snapshots page, checks each step element');
-    // Full implementation would use bb-browser open + snapshot
-    // and compare with semantic selectors from knowledge
+    const { bbOpen, bbSnapshot, bbClose } = await import('./bb-browser.js');
+    const { matchRef } = await import('./ref-utils.js');
+    const knowledge = loadKnowledge(site);
+
+    console.log(`Validating ${site} (${knowledge.site.name})...`);
+
+    // 1. Open submit URL
+    bbOpen(knowledge.site.url);
+    // 2. Snapshot
+    const snap = bbSnapshot({ interactive: false });
+    if (!snap.ok) {
+      console.log('❌ broken: Failed to load page');
+      return;
+    }
+
+    // 3. Check each step's element via semantic selector
+    let allValid = true;
+    let partial = false;
+
+    for (const step of knowledge.workflow.steps) {
+      if (!step.ref && !step.semantic) continue;
+      const match = matchRef(step.ref || '', snap.stdout, step.semantic);
+
+      if (!match) {
+        console.log(`  ❌ Step "${step.action}${step.field ? ' ' + step.field : ''}": element not found`);
+        allValid = false;
+      } else if (match.method === 'semantic') {
+        console.log(`  ⚠️ Step "${step.action}${step.field ? ' ' + step.field : ''}": found via semantic (DOM shifted)`);
+        partial = true;
+      } else {
+        console.log(`  ✅ Step "${step.action}${step.field ? ' ' + step.field : ''}": valid`);
+      }
+
+      // For select_category, also check mapping options
+      if (step.action === 'select_category' && step.mapping) {
+        // Use eval to get select options
+        const optionsResult = bbEval(
+          `Array.from(document.querySelector('${step.semantic?.split(',')[0] || 'select'}').options).map(o => o.value)`
+        );
+        if (optionsResult.ok) {
+          try {
+            const options: string[] = JSON.parse(optionsResult.stdout);
+            const mappedValues = Object.values(step.mapping);
+            const missing = mappedValues.filter(v => !options.includes(v));
+            if (missing.length > 0) {
+              console.log(`  ⚠️ Category options changed: missing values: ${missing.join(', ')}`);
+              partial = true;
+            }
+          } catch {}
+        }
+      }
+    }
+
+    // 4. Report result
+    if (!allValid) {
+      console.log('\n❌ broken: Some elements could not be found. Consider re-teaching this site.');
+    } else if (partial) {
+      console.log('\n⚠️ partial: All elements found, but some DOM changes detected. Still usable.');
+    } else {
+      console.log('\n✅ valid: All elements match. Site knowledge is current.');
+    }
+
+    // 5. Update last_validated
+    knowledge.last_validated = new Date().toISOString().split('T')[0];
+    saveKnowledge(site, knowledge);
+
+    bbClose();
   });
 
 // status command
@@ -2294,7 +2449,7 @@ program
     if (tracker.entries.length > 0) {
       console.log('\nDetails:');
       tracker.entries.forEach(e => {
-        const icon = e.status === 'success' ? '✅' : e.status === 'failed' ? '❌' : '⏸️';
+        const icon = e.status === 'success' ? '✅' : e.status === 'failed' ? '❌' : e.status === 'needs_review' ? '🔍' : '⏸️';
         console.log(`  ${icon} ${e.site}: ${e.status}${e.error ? ` (${e.error})` : ''}`);
       });
     }
@@ -2303,21 +2458,23 @@ program
 program.parse();
 ```
 
-- [ ] **Step 2: Update package.json bin field**
+- [ ] **Step 2: Update package.json — add bin and scripts fields (MERGE into existing, do NOT replace)**
+
+Add these fields to the existing package.json:
 
 ```json
-{
-  "bin": {
-    "bb-submitter": "./dist/cli.js"
-  },
-  "scripts": {
-    "build": "tsc",
-    "start": "node dist/cli.js",
-    "test": "vitest run",
-    "test:watch": "vitest"
-  }
+"bin": {
+  "bb-submitter": "./dist/cli.js"
+},
+"scripts": {
+  "build": "tsc",
+  "start": "node dist/cli.js",
+  "test": "vitest run",
+  "test:watch": "vitest"
 }
 ```
+
+Note: Add `"bin"` and `"scripts"` to the existing package.json object. Do NOT overwrite the entire file — keep `name`, `version`, `dependencies`, `devDependencies`, etc.
 
 - [ ] **Step 3: Build and verify**
 
@@ -2358,22 +2515,38 @@ Teaching mode: learn a new navigation site's submission form.
 
 ## Workflow
 
-1. Load product data: use product-store.ts `loadProduct(productId)`
-2. Open submit URL: `bb-browser open <url>`
+1. Load product data: use `loadProduct(productId)` from product-store.ts
+2. Open submit URL: `bb-browser open <url>`. Check for auth requirement:
+   - No login needed → proceed to form analysis
+   - Login required → identify method (Google OAuth/GitHub/Email), pause for user to complete
 3. Snapshot the page: `bb-browser snapshot -i`
 4. **Analyze the form** and propose field mappings:
    - For each input/textarea/select/upload element in the snapshot:
      - Identify the field semantic from label, placeholder, name, aria-label
      - Match to a product.yaml field
-     - Present suggestion to user
-   - For select elements: snapshot the options, ask user to map product.category_tags to site categories
+     - Present suggestion to user with reasoning
+   - For select elements: use `bb-browser eval` to get all options, ask user to map product.category_tags to site categories
 5. **User confirms/adjusts**: iterate until all fields are mapped
-6. **Save draft**: use knowledge-base.ts `saveDraft(siteId, knowledge)`
-7. **Execute each step**: use bb-browser fill/upload/click/select commands
-   - After each fill, update draft
-8. **Generate semantic selectors**: for each element, use `bb-browser eval` to extract attributes, then use ref-utils.ts `generateSemanticSelector()`
-9. **Generate site knowledge YAML**: with all steps, refs, semantic selectors, category mappings
-10. **User confirms** → saveKnowledge() + update category-mappings.yaml
+   → After confirmation, save draft: `saveDraft(siteId, knowledge)` from knowledge-base.ts
+6. **Detect and handle auth**: if page requires login (Google OAuth etc.), pause: "[intervention] <site>: needs Google login. Complete in browser, then type 'done'"
+7. **Execute each step**: use bb-browser fill/upload/click/select commands. After each fill, update draft.
+   - Page load failure → retry 2x (increasing delays) → abort on failure
+   - Snapshot empty/loading → wait 3s, re-snapshot → warn user if still broken
+   - Submit failure → Agent analyzes error, fixes if possible, retries once
+8. **Generate semantic selectors**: for each element, use `bb-browser eval`:
+   ```
+   el = document.querySelector('[placeholder="Startup name"]')
+   JSON.stringify({tag: el.tagName, type: el.type, placeholder: el.placeholder, ariaLabel: el.ariaLabel, name: el.name, id: el.id})
+   ```
+   Then use `generateSemanticSelector()` from ref-utils.ts
+9. **Generate site knowledge YAML**: with all steps, refs, semantic selectors, category mappings. Include `known_quirks` and `last_validated`.
+10. **User confirms** → `promoteDraft(siteId)` to save + `saveMappings()` for category-mappings.yaml changes
+11. If user cancels (Ctrl+C / "cancel"): save draft, inform "Draft saved. Resume with `teach <site> --product <name>`"
+
+## Agent I/O Contract
+
+- **Input**: snapshot text, product.yaml fields, current step context
+- **Output**: validated field mappings (JSON), generated semantic selectors, site knowledge YAML
 ```
 
 - [ ] **Step 2: Create submit skill**
@@ -2387,12 +2560,24 @@ Replay mode: submit a product using learned site knowledge.
 
 ## Workflow
 
-1. Load site knowledge: knowledge-base.ts `loadKnowledge(siteId)`
-2. Load product data: product-store.ts `loadProduct(productId)`
-3. Load submission tracker: tracker.ts `loadTracker(productId)`
-4. Execute workflow steps using executor.ts `executeWorkflow()`
-5. Handle interventions: use hitl.ts protocol
-6. Record result to tracker: tracker.ts `updateEntry()` + `saveTracker()`
+1. Load site knowledge: `loadKnowledge(siteId)` from knowledge-base.ts
+2. Load product data: `loadProduct(productId)` from product-store.ts
+3. Load submission tracker: `loadTracker(productId)` from tracker.ts
+4. Execute workflow steps using `executeWorkflow()` from executor.ts:
+   - Each step: snapshot → `matchRef(recordedRef, snapshot, semantic)` → resolve element
+   - Ref fails → semantic fallback → DOM change intervention
+   - Network errors: auto-retry 3x (5s/10s/30s delays)
+   - Form validation errors: Agent analyzes, retries 1x with fix
+5. Handle interventions via hitl.ts `formatIntervention()`:
+   - Captcha/OAuth: "[intervention] <site>: <reason>. Complete in browser, type done/skip/retry"
+   - DOM change: "[intervention] <site>: page structure changed. Type 're-teach' to redo, 'skip' to skip"
+   - Form rejection: "[intervention] <site>: submission rejected: <error>. Type 'fix' to try correction, 'skip' to skip"
+6. Retry logic:
+   - Network (timeout/refused): retry 3x automatically, no user involvement
+   - DOM change: pause for human, Agent re-analyzes or user re-teaches
+   - Captcha/OAuth: always pause for human
+   - Server reject (403/429/500): 429 waits Retry-After, others record and skip
+7. Record result: `updateEntry(tracker, site, status, {...})` + `saveTracker(tracker)`
 ```
 
 - [ ] **Step 3: Create batch skill**
@@ -2406,13 +2591,46 @@ Batch mode: submit to all known sites with resume support.
 
 ## Workflow
 
-1. Check for existing batch lock (batcher.ts `loadBatchLock()`)
-2. Build site queue (skip already-successful sites)
-3. For each site: run submit workflow
-4. Update lock file after each site (batcher.ts `updateBatchProgress()`)
-5. Handle interventions with timeout
-6. Rate limit: 5-10s between sites
-7. Stop on 5 consecutive failures
+1. Check for existing batch lock: `loadBatchLock()` from batcher.ts
+   - Exists → resume from `current_site` in queue
+   - Not exists → new: `createBatchLock(product, siteQueue)`
+2. Build site queue: `buildSiteQueue(allSites, successSites)` — skips success and needs_review
+3. For each site in queue:
+   - Run submit workflow (see bb-submitter-submit skill)
+   - After completion: `updateBatchProgress(site)` to advance lock file
+   - Rate limit: 5-10s random delay between sites
+4. Handle interventions with timeout (`--timeout N` minutes):
+   - Show: "[intervention] <site>: <reason> (timeout: N min)"
+   - Timeout reached → mark as pending, skip, continue
+5. Daemon crash recovery:
+   - Detect daemon not running → auto `bb-browser daemon start` (max 3 retries)
+   - If restart fails → record failure, skip site
+6. Lock file corruption:
+   - `loadBatchLock()` returns null on corrupt file → rescan tracker to rebuild queue
+7. Consecutive failure threshold:
+   - 5 consecutive failures → systemic failure → stop batch, notify user
+8. On completion: `deleteBatchLock()`, print summary (success/failed/pending counts)
+```
+
+- [ ] **Step 4: Create knowledge-validate skill**
+
+`.claude/skills/bb-submitter-knowledge-validate.md`:
+
+```markdown
+# bb-submitter Knowledge Validate
+
+Check if site knowledge is still valid by opening the submit page and verifying each step's element exists.
+
+## Workflow
+
+1. Load site knowledge: `loadKnowledge(siteId)`
+2. `bb-browser open <site.url>`
+3. `bb-browser snapshot -i`
+4. For each workflow step with a semantic selector:
+   - Try to match element using `matchRef()`
+   - For select_category steps: also check that mapped values still exist in select options
+5. Report: valid (all match direct), partial (some semantic fallback), broken (elements missing)
+6. Update `last_validated` timestamp in knowledge YAML
 ```
 
 - [ ] **Step 4: Commit**
@@ -2467,7 +2685,10 @@ node_modules/
 dist/
 products/__test__/
 knowledge/sites/__test__/
+knowledge/sites/.drafts/
 knowledge/__test_*
+submissions/.batch-running
+*.log
 ```
 
 - [ ] **Step 3: Add gitkeep files**
@@ -2487,7 +2708,7 @@ Expected: all tests PASS
 - [ ] **Step 5: Final commit**
 
 ```bash
-git add -A
+git add products/example/product.yaml knowledge/sites/.gitkeep submissions/.gitkeep .gitignore
 git commit -m "feat: add sample product data, .gitignore, finalize project structure"
 ```
 
