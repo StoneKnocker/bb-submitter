@@ -1,0 +1,46 @@
+site:
+  name: F6S
+  url: https://www.f6s.com/
+
+auth:
+  method: google_oauth
+
+workflow:
+  steps:
+    - action: open
+      target: https://www.f6s.com/
+
+    - action: click
+      field: add_your_menu
+      note: "点击'Add your' span打开下拉菜单"
+
+    - action: click
+      field: company_menu_item
+      note: "在下拉菜单中点击'Company or Organization'，打开弹出模态框(.popup-layout)"
+
+    - action: fill
+      field: csOrganizationName
+      source: product.name
+
+    - action: fill
+      field: website
+      source: product.url
+      note: "input[placeholder*='website']"
+
+    - action: click
+      field: create_button
+      note: "弹窗内搜索<span>Create</span>元素并.click() — 注意不是<button>标签"
+
+    - action: close_invite_dialog
+      note: "成功后会弹出'Invite people to Bonsai Image'弹窗，点击Cancel关闭"
+
+    - action: record_result
+
+known_quirks:
+  - "f6s是初创公司社交平台，不是AI工具目录。提交流程是通过个人资料创建Company"
+  - "bb-browser fill不持久化，必须用NativeInputValueSetter + dispatchEvent('input') + dispatchEvent('change')"
+  - "Create按钮是<span>元素不是<button>，bb-browser click --ref可能选不中，需在弹窗容器内搜索<span>Create</span>再.click()"
+  - "弹窗内容动态加载，'Add your'是JS下拉菜单(href='#0')，需要两步：先点span打开菜单，再点菜单项打开弹窗"
+  - "成功标志: 弹窗变为'Invite people to Bonsai Image'"
+
+last_validated: 2026-05-27

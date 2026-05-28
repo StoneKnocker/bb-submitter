@@ -47,3 +47,5 @@ knowledge/sites/.drafts/
 knowledge/__test_*
 submissions/.batch-running
 submissions/__test__/
+
+.claude/

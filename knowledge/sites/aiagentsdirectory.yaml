@@ -1,0 +1,97 @@
+site:
+  name: AI Agents Directory
+  url: https://aiagentsdirectory.com/submit-agent
+
+auth:
+  method: none
+
+workflow:
+  steps:
+    - action: open
+      target: https://aiagentsdirectory.com/submit-agent
+
+    - action: fill
+      field: name
+      source: product.name
+
+    - action: fill
+      field: website
+      source: product.url
+
+    - action: fill
+      field: email
+      source: product.contact_email
+
+    - action: fill
+      field: twitterUrl
+      source: product.social.twitter
+
+    - action: fill
+      field: githubUrl
+      source: product.social.github
+
+    - action: fill
+      field: shortDescription
+      source: product.tagline
+
+    - action: fill
+      field: longDescription
+      source: product.description.full
+
+    - action: fill
+      field: keyFeatures
+      source: product.description.short
+
+    - action: fill
+      field: useCases
+      source: product.description.short
+
+    - action: click_radio
+      field: access
+      value: Open Source
+
+    - action: click_radio
+      field: pricingModel
+      value: Free
+
+    - action: click_radio
+      field: industry
+      value: Horizontal
+
+    - action: upload
+      field: logo
+      source: product.logo
+
+    - action: upload
+      field: screenshot
+      source: product.screenshots[0]
+
+    - action: trigger_submit
+      note: "通过React fiber调用form的pendingProps.onSubmit()"
+
+    - action: click
+      field: prefer_free_listing
+      note: "在listing options弹窗中选择免费"
+
+    - action: check_badge
+      field: modalBadgeAccepted
+      note: "通过fiber的pendingProps.onChange({target:{checked:true}})选中"
+
+    - action: click
+      field: submit_for_free
+      note: "通过fiber调用按钮的pendingProps.onClick()"
+
+    - action: record_result
+
+known_quirks:
+  - "表单使用React Server Action，form.submit()和requestSubmit()都不工作，必须通过React fiber的pendingProps.onSubmit()触发"
+  - "Radio buttons用.click()方法有效，.checked=true+dispatchEvent不生效"
+  - "Badge checkbox是React受控组件，DOM click()无效，需fiber pendingProps.onChange触发"
+  - "Submit for free按钮disabled无法通过DOM解除，需btn.disabled=false后调用fiber的pendingProps.onClick()"
+  - "文件上传: DataTransfer hack — new DataTransfer() + dt.items.add(file) + Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'files').set.call(input, dt.files) + dispatchEvent('change')"
+  - "文本输入: 用NativeInputValueSetter (Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set) + dispatchEvent('input') + dispatchEvent('change') 才能触发React onChange"
+  - "完整脚本超过2分钟会超时，需拆分为多个小脚本分别执行"
+  - "提交流程分多步: 表单onSubmit → listing options弹窗 → 选免费 → badge checkbox → Submit for free按钮"
+  - "验证成功: Dashboard页面显示 Pending Free listing"
+
+last_validated: 2026-05-27
