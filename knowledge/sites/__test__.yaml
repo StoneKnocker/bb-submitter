@@ -1,0 +1,13 @@
+site:
+  name: Test Site
+  url: https://test.com/submit
+auth:
+  method: google_oauth
+workflow:
+  steps:
+    - action: open
+      target: https://test.com/submit
+    - action: fill
+      field: name
+      ref: '@1'
+      source: product.name

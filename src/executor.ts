@@ -11,7 +11,7 @@ import {
   bbCheck,
   bbUncheck,
   bbPress,
-  bbWait,
+  bbWaitForElement,
   bbEval,
   bbGet,
 } from './bb-browser.js';
@@ -221,7 +221,7 @@ export async function executeStep(
       }
       if (step.wait) await sleep(step.wait);
       if (step.wait_for) {
-        const wr = bbWait(step.wait_for);
+        const wr = bbWaitForElement(step.wait_for);
         if (!wr.ok) {
           return { ok: false, step, error: `wait_for '${step.wait_for}' failed: ${wr.stderr || wr.stdout}` };
         }
@@ -316,7 +316,7 @@ export async function executeStep(
         }
       }
       if (step.ref) {
-        const r = bbWait(step.ref);
+        const r = bbWaitForElement(step.ref);
         return {
           ok: r.ok,
           step,

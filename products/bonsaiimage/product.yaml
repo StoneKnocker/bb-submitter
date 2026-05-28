@@ -1,0 +1,24 @@
+name: "Bonsai Image"
+tagline: "Ultra-Fast, Light-as-Air AI Generation"
+description:
+  short: "Ultra-fast AI image generator powered by PrismML's 1-bit & Ternary quantization of FLUX.2 Klein 4B. WebGPU-accelerated, open-source, and free to use."
+  full: "Bonsai Image is an ultra-fast AI image generator powered by PrismML's advanced quantization technology. Built on the FLUX.2 Klein 4B diffusion transformer, it applies 1-bit and Ternary quantization to achieve a 6.4x model size reduction while preserving intricate details, textures, and exceptional prompt alignment. WebGPU-accelerated for lightning-fast generation, with an Apache 2.0 open-source license. Open weights available on Hugging Face for local deployment. Generous free tier with no credit card required."
+url: "https://bonsaiimage.com/"
+category_tags:
+  - AI
+  - Image Generation
+  - Developer Tools
+tech_stack:
+  - Python
+  - PyTorch
+  - WebGPU
+  - FLUX.2
+social:
+  twitter: "@staluxy"
+  github: "PrismML-Eng/Bonsai-Image-Demo"
+  huggingface: "prism-ml/bonsai-image"
+launch_date: 2026-05-05
+pricing:
+  model: free
+  starting_price: "Free"
+contact_email: "emluxy@gmail.com"

@@ -25,7 +25,9 @@ const mocks = vi.hoisted(() => {
     bbCheck: { ok: true, stdout: '', stderr: '' },
     bbUncheck: { ok: true, stdout: '', stderr: '' },
     bbPress: { ok: true, stdout: '', stderr: '' },
-    bbWait: { ok: true, stdout: '', stderr: '' },
+    bbWaitForElement: { ok: true, stdout: '', stderr: '' },
+    setCurrentTab: { ok: true, stdout: '', stderr: '' },
+    getCurrentTab: { ok: true, stdout: '', stderr: '' },
     bbEval: { ok: true, stdout: '', stderr: '' },
     bbGet: { ok: true, stdout: '', stderr: '' },
   };
@@ -261,11 +263,11 @@ describe('executeStep', () => {
     expect(result.data).toEqual({ waited: 100 });
   });
 
-  it('wait: calls bbWait with ref', async () => {
+  it('wait: calls bbWaitForElement with ref', async () => {
     const step: WorkflowStep = { action: 'wait', ref: '#submit-button' };
     const result = await executeStep(step, {});
     expect(result.ok).toBe(true);
-    expect(mocks.bbWait).toHaveBeenCalledWith('#submit-button');
+    expect(mocks.bbWaitForElement).toHaveBeenCalledWith('#submit-button');
   });
 
   it('verify: checks if ref text appears in snapshot', async () => {
@@ -407,7 +409,7 @@ describe('executeStep', () => {
       wait_for: '#app-loaded',
     };
     await executeStep(step, {});
-    expect(mocks.bbWait).toHaveBeenCalledWith('#app-loaded');
+    expect(mocks.bbWaitForElement).toHaveBeenCalledWith('#app-loaded');
   });
 });
 

@@ -1,0 +1,96 @@
+site:
+  name: DeepLaunch.io
+  url: https://deeplaunch.io/submit
+
+auth:
+  method: google_oauth
+
+workflow:
+  steps:
+    # === Step 1: Tool Information ===
+    - action: open
+      target: https://deeplaunch.io/submit
+
+    - action: fill
+      field: url
+      ref: "@8"
+      source: product.url
+
+    - action: fill
+      field: name
+      ref: "@10"
+      source: product.name
+
+    - action: fill
+      field: tagline
+      ref: "@12"
+      source: product.tagline
+
+    - action: fill
+      field: description
+      ref: "@14"
+      source: product.description.full
+
+    - action: upload
+      field: logo
+      ref: "@17"
+      source: product.logo
+
+    - action: select_category
+      field: categories
+      ref: "@22"
+      value: Artificial intelligence
+
+    - action: select_category
+      field: categories
+      ref: "@22"
+      value: Image Generation & Editing
+
+    - action: select_category
+      field: categories
+      ref: "@22"
+      value: Developer Tools
+
+    - action: select
+      field: pricing_model
+      ref: "@26"
+      source: product.pricing.model
+
+    - action: select_category
+      field: platforms
+      ref: "@28"
+      value: Web
+
+    - action: fill
+      field: twitter
+      ref: "@38"
+      source: product.social.twitter
+
+    - action: select
+      field: founded_year
+      ref: "@34"
+      source: product.launch_date
+
+    # === Step 2: Submission Type ===
+    - action: click
+      field: next_button
+      ref: "@51"
+
+    - action: click
+      field: free_plan_submit
+      ref: "@17"
+
+    - action: record_result
+
+known_quirks:
+  - "Categories和Platforms是shadcn dialog combobox，不支持click选项（会变为单选），必须使用type+Enter方式逐个选择"
+  - "Pricing Model(ref=26)和Founded Year(ref=34)是隐藏在button combobox后面的原生<select>元素，可直接用select命令"
+  - "Logo上传使用MDX Image Upload组件，内部流程为获取R2 presigned URL后PUT文件，DataTransfer设置文件后fetch失败，需要拦截fetch mock R2响应或patch React formState"
+  - "react-hook-form在logo未成功上传时isValid始终为false，需手动patch fiber state中的isValid=true"
+  - "Next按钮的click事件不触发步骤切换，需通过React fiber的pendingProps.onClick()直接调用"
+  - "Description最低500字符"
+  - "Logo格式限制: SVG/WEBP/PNG/JPG，最大500KB"
+  - "Screenshots最多4个文件，每个<5MB"
+  - "表单分两步：Tool Information → Choose Your Plan"
+
+last_validated: 2026-05-27
