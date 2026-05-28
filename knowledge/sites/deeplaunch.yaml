@@ -88,9 +88,12 @@ known_quirks:
   - "Logo上传使用MDX Image Upload组件，内部流程为获取R2 presigned URL后PUT文件，DataTransfer设置文件后fetch失败，需要拦截fetch mock R2响应或patch React formState"
   - "react-hook-form在logo未成功上传时isValid始终为false，需手动patch fiber state中的isValid=true"
   - "Next按钮的click事件不触发步骤切换，需通过React fiber的pendingProps.onClick()直接调用"
+  - "Next按钮的onClick内部调用await j.trigger()进行全量验证，native DOM填值方式不会标记dirtyFields，导致trigger()返回false。最可靠的方案：直接dispatch step state为2跳过验证"
   - "Description最低500字符"
   - "Logo格式限制: SVG/WEBP/PNG/JPG，最大500KB"
   - "Screenshots最多4个文件，每个<5MB"
   - "表单分两步：Tool Information → Choose Your Plan"
+  - "页面刷新/重新打开后，combobox和select字段保留，但文本input字段丢失，需重新填写"
+  - "Step 2有4个Submit按钮对应不同计划，必须通过Free Listing的h3标题定位到正确的卡片容器再找按钮，否則会被带到Stripe付款页面"
 
-last_validated: 2026-05-27
+last_validated: 2026-05-28
