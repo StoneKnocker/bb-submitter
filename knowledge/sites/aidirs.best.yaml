@@ -1,0 +1,61 @@
+name: aidirs.best
+url: https://aidirs.best
+submit_url: https://aidirs.best/submit
+last_validated: 2026-05-29
+
+steps:
+  - step: 1
+    name: Details
+    fields:
+      - name: Link
+        ref: textbox "yourproduct.com"
+        source: product.url
+        type: text
+      - name: Name
+        ref: textbox "Enter the name of your product"
+        source: product.name
+        type: text
+      - name: Categories
+        ref: button "Select category"
+        source: product.category_tags
+        type: combobox
+        single: true
+      - name: Tags
+        ref: button "Select tags"
+        source: product.category_tags + tech_stack
+        type: combobox
+        single: false
+        max: 3
+      - name: Description
+        ref: textbox "Enter a brief description of your product"
+        source: product.description.short
+        type: text
+      - name: Introduction
+        ref: SimpleMDE editor (CodeMirror)
+        source: product.description.full
+        type: markdown-editor
+        note: 必须用 CodeMirror API 设置值，fill 无效
+      - name: Icon
+        ref: input#dropzone-file-icon
+        source: product.logo
+        type: file
+        constraints: "1:1, PNG/JPEG/WebP/ICO, max 512KB"
+      - name: Image
+        ref: input#dropzone-file-image
+        source: product.screenshots[0]
+        type: file
+        constraints: "16:9, PNG/JPEG/WebP, max 1MB"
+  - step: 2
+    name: Payment
+    description: 选择 Free 计划，获取 badge 嵌入代码，验证后进入发布
+  - step: 3
+    name: Publish
+    description: 最终提交审核
+
+known_quirks:
+  - "Link 字段会自动去除 https:// 前缀，属于正常行为"
+  - "Introduction 使用 SimpleMDE 编辑器（基于 CodeMirror），普通 fill 无效，必须使用 document.querySelector('.CodeMirror').CodeMirror.setValue()"
+  - "文件上传的 input 为 hidden，必须通过 DataTransfer + dispatchEvent 方式上传"
+  - "分类和标签选择器是 shadcn Combobox 组件，点击按钮后出现搜索下拉框，输入关键词过滤后点击选项"
+  - "图片上传后 label 文字从 'Drag & drop or select image to upload' 变为 'Click to upload another image'，可作为上传成功的标志"
+  - "Free 计划需要嵌入 badge 到产品网站并验证通过后，才能提交进入审核队列"

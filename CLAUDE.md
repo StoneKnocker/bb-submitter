@@ -13,67 +13,46 @@
 ## 表单填写
 - Founder's Twitter 字段统一填写 `https://x.com/staluxy`，除非产品明确有其他 Twitter 账号
 
-## SPA 表单通用技巧
-
-目标站点多为 React/Vue SPA 应用，常规 DOM 操作经常不生效，需用以下模式：
-
-### React 受控组件填值
-普通 `fill` 命令对 React 受控组件无效时，使用 NativeInputValueSetter：
-```js
-Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, 'new value');
-el.dispatchEvent(new Event('input', { bubbles: true }));
-el.dispatchEvent(new Event('change', { bubbles: true }));
-```
-
-### React 表单提交
-`form.submit()` 和 `requestSubmit()` 对 React Server Action 无效时，通过 React fiber 触发：
-```js
-const fiber = getFiberFromDOM(formElement);
-fiber.pendingProps.onSubmit(/* event */);
-```
-
-### 文件上传 (DataTransfer)
-SPA 的文件 input 无法通过 `fill` 设置文件路径，需用 DataTransfer hack：
-```js
-const dt = new DataTransfer();
-const file = new File([base64ToUint8Array(base64Str)], 'logo.png', { type: 'image/png' });
-dt.items.add(file);
-Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files').set.call(el, dt.files);
-el.dispatchEvent(new Event('change', { bubbles: true }));
-```
-
-### Combobox 多选
-shadcn 等组件库的 combobox 不支持直接 click 选项（会变为单选），用 `type` + `Enter`：
-```bash
-bb-browser type @ref "Category Name"
-bb-browser press Enter
-```
-
-### 大脚本拆分
-超过 2 分钟的脚本会超时，需拆分为多个 `bb-browser eval` 调用，每个调用完成一个独立步骤。
-
 ## 项目目录结构
 - `knowledge/sites/` — 各目标站点的提交知识库（YAML格式），包含表单结构、工作流步骤、已知坑点。提交前先查阅对应站点的知识文件
 - `products/` — 产品数据目录，每个产品一个子目录，包含 `product.yaml`（名称、描述、URL、分类、logo、截图等）和媒体资源文件
 - `submissions/` — 提交记录目录，每次成功提交后记录提交详情（站点、产品、时间、结果）
+
+## 提交工作流
+
+每次提交产品到目标站点，遵循三步走：
+
+### 1. 提交前：对齐数据
+
+- 查阅 `knowledge/sites/<site>.yaml`，确认该站点的表单结构、步骤、已知坑点
+- 确认 `products/<product>/product.yaml` 包含了 workflow 中所有 `source: product.xxx` 引用的字段
+- 确认 logo、截图等媒体文件已放入产品目录
+
+### 2. 提交中：按步骤执行
+
+- 按 knowledge yaml 的 `workflow.steps` 逐步操作
+- 每个 step 的 `source: product.xxx` 直接从 product yaml 对应字段取值
+- 文本输入用 `bb-browser fill`，React 受控组件参考 [SPA 表单通用技巧](docs/spa-form-techniques.md)
+- 文件上传用 DataTransfer + `bb-browser eval`
+- 遇到新问题不要硬闯，参考 `known_quirks` 或 [调试指南](docs/debugging.md) 排查
+
+### 3. 提交后：沉淀经验
+
+- 更新 `knowledge/sites/<site>.yaml`：
+  - 补充新发现的坑到 `known_quirks`
+  - 如 workflow 步骤有变，同步更新 `workflow.steps`
+  - 更新 `last_validated` 为当前日期
+- 在 `submissions/` 目录写入提交记录文件
 
 ## 知识沉淀
 - 每次成功提交站点后，必须将经验记录到 `knowledge/sites/<site-name>.yaml`
 - 每次成功提交后，必须在 `submissions/` 目录记录提交详情（站点、产品、提交时间、结果状态）
 - 内容包括：表单字段映射、工作流步骤、遇到的坑（known_quirks）、验证日期（last_validated）
 
-## 调试
+## 参考文档
 
-提交失败或不生效时，使用 bb-browser 调试命令排查：
-
-```bash
-bb-browser network requests                  # 查看网络请求（确认 API 是否发出）
-bb-browser network requests "api" --with-body # 过滤请求并查看请求/响应体
-bb-browser console                           # 查看控制台输出（React 错误等）
-bb-browser errors                            # 查看 JS 异常
-```
-
-常见排查路径：
-1. `bb-browser network requests` — 确认表单提交的 API 请求是否发出、返回了什么
-2. `bb-browser console` — 查看前端框架是否有报错
-3. `bb-browser errors` — 查看 JS 异常
+| 文档 | 说明 |
+|---|---|
+| [docs/spa-form-techniques.md](docs/spa-form-techniques.md) | React 受控组件填值、fiber 表单提交、DataTransfer 上传、combobox 多选 |
+| [docs/knowledge-yaml-actions.md](docs/knowledge-yaml-actions.md) | Knowledge yaml action 类型速查表与 ref 管理原则 |
+| [docs/debugging.md](docs/debugging.md) | bb-browser 调试命令与排查路径 |
