@@ -1,7 +1,7 @@
-# bb-submitter 项目规则
+# bb-submitter: bb-browser cli 提交说明手册
 
 ## 浏览器工具
-- 所有对外部网站的访问、表单填充、点击操作必须使用 `bb-browser` CLI，禁止使用 `chrome-devtools-mcp`
+- **MUST:** use `bb-browser` CLI, **FORBIDDEN:** `chrome-devtools-mcp`
 - 原因：bb-browser 使用本地 Chrome 实例，可保持登录状态和持久化会话
 - 每次提交完成后必须清理浏览器标签页（关闭提交相关页面，只保留 about:blank）
 
