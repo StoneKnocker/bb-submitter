@@ -16,7 +16,7 @@
 ## 项目目录结构
 - `knowledge/sites/` — 各目标站点的提交知识库（YAML格式），包含表单结构、工作流步骤、已知坑点。提交前先查阅对应站点的知识文件
 - `products/` — 产品数据目录，每个产品一个子目录，包含 `product.yaml`（名称、描述、URL、分类、logo、截图等）和媒体资源文件
-- `submissions/` — 提交记录目录，每次成功提交后记录提交详情（站点、产品、时间、结果）
+- `submissions/<product>.yaml` — 每个产品一个文件，记录已提交的站点和日期，提交前查此表避免重复提交
 
 ## 提交工作流
 
@@ -42,12 +42,12 @@
   - 补充新发现的坑到 `known_quirks`
   - 如 workflow 步骤有变，同步更新 `workflow.steps`
   - 更新 `last_validated` 为当前日期
-- 在 `submissions/` 目录写入提交记录文件
+- 在 `submissions/<product>.yaml` 追加 `site: date`
 
 ## 知识沉淀
 - 每次成功提交站点后，必须将经验记录到 `knowledge/sites/<site-name>.yaml`
-- 每次成功提交后，必须在 `submissions/` 目录记录提交详情（站点、产品、提交时间、结果状态）
-- 内容包括：表单字段映射、工作流步骤、遇到的坑（known_quirks）、验证日期（last_validated）
+- 每次成功提交后，必须在 `submissions/<product>.yaml` 追加站点和日期
+- 知识文件内容：表单字段映射、工作流步骤、遇到的坑（known_quirks）、验证日期（last_validated）
 
 ## 参考文档
 
