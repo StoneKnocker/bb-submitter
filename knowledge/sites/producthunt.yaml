@@ -1,0 +1,164 @@
+name: Product Hunt
+url: https://www.producthunt.com/posts/new
+last_validated: 2026-05-29
+
+form:
+  # Step 1: URL entry
+  initial_url:
+    field: url
+    source: product.url
+    note: "fill命令会自动加https://前缀，填入完整URL会导致重复协议头。使用JS setter直接设置value。"
+
+  # Step 2: Multi-section form at /posts/new/submission
+  sections:
+    - main_info
+    - images_and_media
+    - makers
+    - shoutouts
+    - extras
+    - connect_with_investors
+    - launch_checklist
+
+workflow:
+  steps:
+    - action: navigate
+      target: "https://www.producthunt.com/posts/new"
+      note: "页面加载后可见URL输入框和Get started按钮"
+
+    - action: fill_url
+      field: "input[name=url]"
+      source: product.url
+      note: "用JS setter设值避免重复https://前缀问题。使用nativeInputValueSetter + dispatchEvent(input/change)。"
+      js: |
+        const input = document.querySelector('input[name="url"]');
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        nativeInputValueSetter.call(input, '<url>');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+
+    - action: click
+      target: "Get started button"
+      note: "URL验证通过后按钮可点击"
+
+    - action: fill
+      field: "input[name=name]"
+      source: product.name
+      note: "通常自动从网页抓取填充"
+
+    - action: fill
+      field: "input[name=tagline]"
+      source: product.tagline
+      note: "60字符限制"
+
+    - action: fill
+      field: "input[name=productTwitterHandle]"
+      source: product.social.twitter
+      note: "label为x.com/前置，只需填handle（如staluxy），不含@"
+
+    - action: fill
+      field: "textarea[name=description]"
+      source: product.description.short
+      note: "500字符限制，通常自动从网页抓取填充"
+
+    - action: check
+      field: "input[name=openSource]"
+      condition: "product.license contains open-source"
+      note: "开源项目勾选此框"
+
+    - action: select_tags
+      field: "input[name=topics]"
+      source: product.category_tags
+      note: "点击输入框打开下拉，逐个点击选择。最多3个标签。"
+      max: 3
+
+    - action: fill
+      field: "textarea[name=commentBody]"
+      source: "first_comment"
+      note: "首个评论，500字符限制。说明产品灵感、解决的问题。"
+
+    - action: click
+      target: "Next step: Images and media"
+
+    - action: upload_image
+      field: "input#file-input-thumbnailImageUuid"
+      type: thumbnail
+      source: product.logo
+      note: "缩略图/Logo。小文件(<50KB)可用base64直接传参，大文件需通过本地HTTP服务器+CORS中转。"
+      method: "DataTransfer + dispatchEvent(change/input)"
+
+    - action: upload_image
+      field: "input#file-input-media"
+      type: gallery
+      source: product.screenshots
+      note: "截图/画廊图片。大base64通过$(cat)传递会触发Argument list too long。用本地HTTP服务器+CORS: python3 http.server + Access-Control-Allow-Origin: *，然后fetch localhost获取blob上传。"
+      large_file_method: "fetch_localhost"
+
+    - action: click
+      target: "Next step: Makers"
+
+    - action: select
+      target: "I worked on this product"
+      note: "选择maker身份。当前登录用户自动列为主maker。"
+
+    - action: check
+      field: "input[name=soloMaker]"
+      note: "独立开发者勾选此项"
+
+    - action: click
+      target: "Next step: Shoutouts"
+
+    - action: skip
+      target: "Shoutouts section"
+      note: "可选项，跳过"
+
+    - action: click
+      target: "Next step: Extras"
+
+    - action: select_pricing
+      source: product.pricing.model
+      options:
+        - free: "This launch is free to use"
+        - paid: "This launch requires payment"
+        - paid_with_trial: "Paid (with free trial or plan)"
+
+    - action: select_funding
+      source: "funding"
+      options:
+        - bootstrapped
+        - yc
+        - venture_backed
+
+    - action: click
+      target: "Next step: Connect with Investors"
+
+    - action: skip
+      target: "Connect with Investors"
+      note: "可选项，跳过"
+
+    - action: click
+      target: "Next step: Launch checklist"
+
+    - action: review_checklist
+      note: "所有项目应显示✓。确认无误后选择Schedule或Draft。"
+
+    - action: click
+      target: "Schedule launch for later"
+      note: "弹出日期选择器，选择目标日期后出现Confirm scheduled date按钮"
+
+    - action: click
+      target: "目标日期"
+      note: "Product Hunt通常建议提前几天排期"
+
+    - action: click
+      target: "Confirm scheduled date"
+      note: "提交成功后显示launch tips面板和产品prelaunch页面"
+
+known_quirks:
+  - "URL输入框使用fill命令会导致https://重复前缀。必须用JS原生setter绕过框架的自动补全。"
+  - "大文件base64(>100KB)通过$(cat)传参会触发'Argument list too long'错误。两个方案: 1)小文件用内联base64 2)大文件启动本地HTTP服务器，浏览器fetch后转blob上传。"
+  - "标签(tags)为combobox输入框，点击后显示选项列表，逐个点击选取。已选项从列表中消失。"
+  - "Shoutouts和Connect with Investors为可选章节，可跳过。"
+  - "日期选择器点击日期后出现Confirm按钮，确认后显示成功提示面板。"
+  - "提交后自动跳转到 prelaunch 页面(products/<slug>/prelaunch)。"
+  - "表单为单页多section设计，通过Next step按钮在不同section间导航。左侧有section导航栏可点击跳转。"
+  - "产品URL检测抓取后会自动填充name、description等字段，质量通常不错，但tagline需手动填写。"
