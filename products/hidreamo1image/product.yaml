@@ -5,6 +5,9 @@ description:
   full: "HiDream O1 Image is a cutting-edge AI image generation model that revolutionizes the field with its pixel-native architecture. By eliminating the need for Variational Autoencoders (VAE), it generates images directly at pixel level, delivering unprecedented quality and fidelity. The model supports text-to-image generation with a built-in prompt agent for optimized results. Available in both Full and Dev versions, it's compatible with ComfyUI for seamless workflow integration. Free to use commercially."
   zh: "HiDream O1 Image 是革命性的AI图像生成模型，采用像素原生架构，无需VAE，直接生成超高保真度图像。"
 url: "https://hidreamo1image.com/"
+logo: logo.png
+screenshots:
+  - screenshot.jpg
 category_tags:
   - AI
   - Image Generation
