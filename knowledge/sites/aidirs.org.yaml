@@ -1,0 +1,57 @@
+name: aidirs.org
+url: https://aidirs.org
+submit_url: https://aidirs.org/submit
+last_validated: 2026-05-29
+
+steps:
+  - step: 1
+    name: Details
+    fields:
+      - name: Link
+        ref: textbox "Enter the link to your product"
+        source: product.url
+        type: text
+      - name: Name
+        ref: textbox "Enter the name of your product"
+        source: product.name
+        type: text
+      - name: Categories
+        ref: button "Select categories"
+        source: product.category_tags
+        type: combobox
+        single: true
+      - name: Tags
+        ref: button "Select tags"
+        source: product.category_tags + tech_stack
+        type: combobox
+        single: false
+      - name: Description
+        ref: textbox "Enter a brief description of your product"
+        source: product.description.short
+        type: text
+      - name: Introduction
+        ref: SimpleMDE editor (CodeMirror)
+        source: product.description.full
+        type: markdown-editor
+        note: 必须用 CodeMirror API 设置值
+      - name: Icon
+        ref: input#dropzone-file-icon
+        source: product.logo
+        type: file
+        constraints: "1:1, PNG/JPEG, max 1MB"
+      - name: Image
+        ref: input#dropzone-file-image
+        source: product.screenshots[0]
+        type: file
+        constraints: "16:9, PNG/JPEG, max 1MB"
+  - step: 2
+    name: Payment
+    description: 选择 "Submit for Review" 进入审核队列（免费），后续显示 "Go to Dashboard & Wait"
+
+known_quirks:
+  - "有 Cloudflare 防护，需要手动点击通过验证（headless 模式无法自动通过）"
+  - "Link 字段会自动去除 https:// 前缀"
+  - "Introduction 使用 SimpleMDE 编辑器，fill 无效，必须用 CodeMirror API"
+  - "文件上传的 input 为 hidden，必须通过 DataTransfer + dispatchEvent 方式上传"
+  - "Submit for Review 点击后会弹出 Cloudflare 验证，通过后按钮变为 Go to Dashboard & Wait"
+  - "与 aidirs.best 的区别：Categories 不同（AI Image 等），图标只支持 PNG/JPEG，最大 1MB"
